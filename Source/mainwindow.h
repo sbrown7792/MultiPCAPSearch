@@ -15,6 +15,21 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private slots:
+
+
+    void on_addFilter_clicked();
+
+    void on_deleteFilter_clicked();
+
+    void on_liveSearch_stateChanged(int arg1);
+
+    void doSearch();
+
+    void updatePCAPtable();
+
+    void on_filterTable_cellChanged(int row, int column);
+
 private:
     Ui::MainWindow *ui;
 };
