@@ -2,30 +2,31 @@
 #define PCAP_H
 
 #include <QString>
-
+#include <QProcess>
+#include <QMessageBox>
+#include <QFileDialog>
 
 class PCAP
 {
 public:
     PCAP();
 
+    PCAP(QString fileName);
+
+    PCAP(QString fileName, QString name);
+
     bool setFile(QString filename);
 
-    bool setFilter(QString filter);
+    void setName(QString name);
 
-    bool doSearch();
+    int doSearch(QString filter);
 
-    QString getResult();
-
-    QString getFilterString();
-
-    QString getFilename();
+    QString getName();
 
 private:
-    QString PCAPfile;
-    QString PCAPfilter;
-    QString PCAPresult;
+    QString PCAPfile = "";
 
+    QString PCAPname = "";
 };
 
 #endif // PCAP_H
