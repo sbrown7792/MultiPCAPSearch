@@ -2,6 +2,12 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QFileDialog>
+#include <QProcess>
+#include <QMessageBox>
+#include <QInputDialog>
+
+#include "pcap.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -29,6 +35,8 @@ private slots:
     void updatePCAPtable();
 
     void on_filterTable_cellChanged(int row, int column);
+
+    void on_addPCAP_clicked();
 
 private:
     Ui::MainWindow *ui;

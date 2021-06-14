@@ -1,6 +1,9 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+
+QList<PCAP> PCAPList;
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -82,7 +85,13 @@ void MainWindow::updatePCAPtable()
 
 void MainWindow::doSearch()
 {
+    //change this to use filter(s) from list
+    //also change to use the PCAP object that will be stored IN the table
+    //also i guess, i need to store the PCAP object in the table
 
+    QString myFilters = "ip.src == 192.168.250.4";
+
+    QMessageBox::warning(this, tr("Result"),QString::number(PCAPList[PCAPList.length()-1].doSearch(myFilters)));
 }
 
 
@@ -93,4 +102,20 @@ void MainWindow::on_filterTable_cellChanged(int row, int column)
         return;
 
     return;
+}
+
+void MainWindow::on_addPCAP_clicked()
+{
+    //prompt user for pcap file
+    QString fileName = QFileDialog::getOpenFileName(this,
+        tr("Select PCAP"), ".", tr("PCAP Files (*.pcap *.pcapng)"));
+
+    //ask for a friendly name
+    QString name = QInputDialog::getText(this, tr("Give this PCAP a name"),
+                                             tr("Friendly Name:"), QLineEdit::Normal,
+                                             fileName.split("/").last());
+
+    //store the PCAP object in a list - probably need to change it to store in the table, unless we store pointers in the table??
+    PCAPList.append(PCAP(fileName,name));
+
 }

@@ -6,6 +6,17 @@ PCAP::PCAP()
 
 }
 
+PCAP::PCAP(QString fileName)
+{
+    PCAPfile = fileName;
+}
+
+PCAP::PCAP(QString fileName, QString name)
+{
+    PCAPfile = fileName;
+    PCAPname = name;
+}
+
 bool PCAP::setFile(QString filename)
 {
     //test if filename exists/can be opened
@@ -14,26 +25,36 @@ bool PCAP::setFile(QString filename)
     return true;
 }
 
-bool PCAP::setFilter(QString filter)
-{
-    //filter might need to be tested but for now we'll deal with invalid filters at the "actually filter" phase
 
-    PCAPfilter = filter;
-    return true;
+QString PCAP::getName()
+{
+    return PCAPname;
 }
 
-QString PCAP::getResult()
+void PCAP::setName(QString name)
 {
-    return PCAPresult;
+    PCAPname = name;
 }
 
 
-QString PCAP::getFilename()
+int PCAP::doSearch(QString PCAPfilter)
 {
-    return PCAPfile;
-}
+    //first test if PCAP file is real and openable
+    if (false)
+    {
+        return -1;
+    }
 
-QString PCAP::getFilterString()
-{
-    return PCAPfilter;
+    QProcess* m_agent = new QProcess();
+    QStringList args = QStringList();
+    QString myPath = QDir::currentPath();
+    args << myPath + "/tshark.exe -n -r";
+    args << PCAPfile;
+    args << PCAPfilter;
+    args << "| measure-object -line | Select-Object -ExpandProperty Lines";
+    m_agent->start("powershell", args);
+    m_agent->waitForFinished(30000);
+
+    QString output(m_agent->readAllStandardOutput());
+    return output.toInt();
 }
