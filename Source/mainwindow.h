@@ -32,11 +32,13 @@ private slots:
 
     void doSearch();
 
-    void updatePCAPtable();
+    void updateResultTable();
 
     void on_filterTable_cellChanged(int row, int column);
 
     void on_addPCAP_clicked();
+
+    void on_searchNow_clicked();
 
 private:
     Ui::MainWindow *ui;

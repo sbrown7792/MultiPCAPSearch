@@ -37,12 +37,19 @@ void PCAP::setName(QString name)
 }
 
 
-int PCAP::doSearch(QString PCAPfilter)
+QString PCAP::doSearch(QString PCAPfilter)
 {
     //first test if PCAP file is real and openable
-    if (false)
+    if (PCAPfile.isEmpty() || PCAPfile.isNull())
     {
-        return -1;
+        return "Error opening PCAP file";
+    }
+
+
+    //now see if we've already searched for this filter before. if so, just return the already-gotten result
+    if (resultHash.contains(PCAPfilter))
+    {
+        return resultHash.value(PCAPfilter);
     }
 
     QProcess* m_agent = new QProcess();
@@ -56,5 +63,12 @@ int PCAP::doSearch(QString PCAPfilter)
     m_agent->waitForFinished(30000);
 
     QString output(m_agent->readAllStandardOutput());
-    return output.toInt();
+
+    resultHash.insert(PCAPfilter, output);
+    return output;
+}
+
+void PCAP::clearResults()
+{
+    resultHash.clear();
 }

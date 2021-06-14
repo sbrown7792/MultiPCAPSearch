@@ -5,6 +5,8 @@
 #include <QProcess>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QHash>
+
 
 class PCAP
 {
@@ -19,11 +21,16 @@ public:
 
     void setName(QString name);
 
-    int doSearch(QString filter);
+    QString doSearch(QString filter);
+
+    void clearResults();
 
     QString getName();
 
 private:
+
+    QHash<QString, QString> resultHash;
+
     QString PCAPfile = "";
 
     QString PCAPname = "";
