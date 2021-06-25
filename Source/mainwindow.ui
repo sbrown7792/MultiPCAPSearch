@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>MultiPCAPSearch</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QTableWidget" name="resultsTable">
@@ -122,9 +122,9 @@
    <widget class="QPushButton" name="searchNow">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>60</y>
-      <width>81</width>
+      <x>40</x>
+      <y>50</y>
+      <width>91</width>
       <height>23</height>
      </rect>
     </property>
@@ -135,8 +135,8 @@
    <widget class="QCheckBox" name="liveSearch">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>36</y>
+      <x>50</x>
+      <y>20</y>
       <width>91</width>
       <height>21</height>
      </rect>
@@ -156,6 +156,78 @@
     </property>
     <property name="text">
      <string>Clear all results</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>130</y>
+      <width>101</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>14</pointsize>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Filters →</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>120</x>
+      <y>240</y>
+      <width>131</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>PCAP Files ↓</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>120</y>
+      <width>171</width>
+      <height>101</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Add PCAP files, and wireshark dispay filters. Then, click &quot;Search Now&quot; or leave &quot;Live Search&quot; checked for live updates as you add/change PCAPs and Filters. The results are the number of packets which match the filter.</string>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_4">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>100</y>
+      <width>121</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Instructions:</string>
     </property>
    </widget>
   </widget>

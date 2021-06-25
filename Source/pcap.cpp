@@ -55,7 +55,10 @@ QString PCAP::doSearch(QString PCAPfilter)
     QProcess* m_agent = new QProcess();
     QStringList args = QStringList();
     QString myPath = QDir::currentPath();
-    args << myPath + "/tshark.exe -n -r";
+
+    //wrap the path in powershell crap
+    args << "& \'" + myPath + "/lib/tshark.exe\' -n -r";
+
     //wrap the file in quotes
     args << "\"" + PCAPfile + "\"";
 
@@ -64,7 +67,7 @@ QString PCAP::doSearch(QString PCAPfilter)
 
     args << "| measure-object -line | Select-Object -ExpandProperty Lines";
     m_agent->start("powershell", args);
-    m_agent->waitForFinished(30000);
+    m_agent->waitForFinished(300000);
 
     QString output(m_agent->readAllStandardOutput());
     output.append('|');
