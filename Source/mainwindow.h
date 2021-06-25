@@ -40,6 +40,8 @@ private slots:
 
     void on_searchNow_clicked();
 
+    void on_clearResults_clicked();
+
 private:
     Ui::MainWindow *ui;
 };
