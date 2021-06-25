@@ -22,11 +22,6 @@ MainWindow::~MainWindow()
 }
 
 
-
-// this command in powershell will filter, count, and tell you how long
-//  Measure-command { .\tshark.exe -r ../../Tests/rx.pcap -n "ip.src == 192.168.250.4" | measure-object -line}
-//test against speed of filtering to a new file, then running capinfos on that new file
-
 void MainWindow::on_addFilter_clicked()
 {
     addingRow=true;
@@ -75,27 +70,53 @@ void MainWindow::on_deleteFilter_clicked()
 void MainWindow::on_liveSearch_stateChanged(int arg1)
 {
     ui->searchNow->setEnabled(!ui->liveSearch->checkState());
+
+    if (ui->liveSearch->checkState())
+    {
+        doSearch();
+    }
 }
 
-void MainWindow::updateResultTable()
+void MainWindow::updateResultTable(QTableWidgetItem* resultItem, QString stdOut, QString stdErr)
 {
-    //iterate thro
+    resultItem->setText(stdOut);
+    resultItem->setToolTip(stdErr);
 
+    if (!(stdErr.isNull() || stdErr.isEmpty()))
+    {
+        //highlight the cell because there's an error
+        resultItem->setBackground(QColor("red"));
+    }
+}
 
+void MainWindow::prepResultTable(QTableWidgetItem *resultItem)
+{
+    resultItem->setBackground(QColor("white"));
+    resultItem->setText("Filtering...");
+    resultItem->setToolTip("May take up to 5 minutes");
+}
 
-    //if (ui->liveSearch->checkState())
-    //{
-    //    doSearch();
-    //}
+void MainWindow::searchInBG(int i, int j)
+{
+    QTableWidgetItem* resultItem = ui->resultsTable->item(i,j+1);
+
+    emit startingFilter(resultItem);
+
+    QString filter = ui->filterTable->item(j,1)->text();
+
+    PCAP *searchPCAP = ui->resultsTable->item(i,0)->data(Qt::UserRole).value<PCAP*>();
+    QString result = searchPCAP->doSearch(filter);
+    QString stdOut = result.split('|').at(0).split('\n').at(0);
+    QString stdErr = result.split('|').at(1);
+
+    emit newResult(resultItem,stdOut,stdErr);
 }
 
 void MainWindow::doSearch()
 {
-    //change this to use filter(s) from list
-    //also change to use the PCAP object that will be stored IN the table
-    //also i guess, i need to store the PCAP object in the table
-
-    //QString myFilters = "ip.src == 192.168.250.4";
+    //connect signals to slots so the main thread will do the update on the gui, not the searchInBG thread
+    connect(this,SIGNAL(newResult(QTableWidgetItem*,QString,QString)),SLOT(updateResultTable(QTableWidgetItem*,QString,QString)));
+    connect(this,SIGNAL(startingFilter(QTableWidgetItem*)),SLOT(prepResultTable(QTableWidgetItem*)));
 
     //iterate through PCAP rows
     for (int i=0;i<ui->resultsTable->rowCount();i++)
@@ -103,25 +124,7 @@ void MainWindow::doSearch()
         //iterate through filter rows
         for (int j=0;j<ui->filterTable->rowCount();j++)
         {
-            ui->resultsTable->item(i,j+1)->setBackground(QColor("white"));
-            ui->resultsTable->item(i,j+1)->setText("Filtering...");
-
-            //TODO throw this stuff in the background please
-            QString filter = ui->filterTable->item(j,1)->text();
-
-            PCAP *searchPCAP = ui->resultsTable->item(i,0)->data(Qt::UserRole).value<PCAP*>();
-            QString result = searchPCAP->doSearch(filter);
-            QString stdOut = result.split('|').at(0);
-            QString stdErr = result.split('|').at(1);
-
-            ui->resultsTable->item(i,j+1)->setText(stdOut.split('\n').at(0));
-            ui->resultsTable->item(i,j+1)->setToolTip(stdErr);
-
-            if (!(stdErr.isNull() || stdErr.isEmpty()))
-            {
-                //highlight the cell because there's an error
-                ui->resultsTable->item(i,j+1)->setBackground(QColor("red"));
-            }
+            QtConcurrent::run(this, &MainWindow::searchInBG, i, j);
         }
     }
 }
@@ -172,8 +175,17 @@ void MainWindow::on_addPCAP_clicked()
     //prompt user for pcap file
     QString fileName = QFileDialog::getOpenFileName(this, tr("Select PCAP"), ".", tr("PCAP Files (*.pcap *.pcapng)"));
 
+    if (fileName.isEmpty() || fileName.isNull())
+    {
+        return;
+    }
+
     //ask for a friendly name
-    QString name = QInputDialog::getText(this, tr("Give this PCAP a name"), tr("Friendly Name:"), QLineEdit::Normal,fileName.split("/").last());
+    QString name = QInputDialog::getText(this, tr("Give this PCAP a name"), tr("Friendly Name:"), QLineEdit::Normal,fileName.split("/").last().split(".pcap").at(0));
+    if (name.isEmpty() || name.isNull())
+    {
+        name = fileName;
+    }
 
     //store the PCAP object in a list - probably need to change it to store in the table, unless we store pointers in the table??
     //PCAPList.append(PCAP(fileName,name));
@@ -184,10 +196,12 @@ void MainWindow::on_addPCAP_clicked()
     QTableWidgetItem *pcapFile = new QTableWidgetItem();
     PCAP* temp = new PCAP(fileName,name);
     pcapFile->setData(Qt::UserRole,QVariant::fromValue<PCAP*>(temp));
+    pcapFile->setCheckState(Qt::Unchecked);
 
     int row = ui->resultsTable->rowCount()-1;
     ui->resultsTable->setItem(row,0,pcapFile);
     ui->resultsTable->item(row,0)->setText(name);
+    ui->resultsTable->item(row,0)->setToolTip(fileName);
 
     //fill in the blank column items for new row in the results table
     //column 0 is the name of the PCAP, we must make new items (and insert) for columns 1 - n (where n is number of filters)
@@ -224,6 +238,17 @@ void MainWindow::on_clearResults_clicked()
             ui->resultsTable->item(i,j+1)->setText("");
             ui->resultsTable->item(i,j+1)->setToolTip("");
             ui->resultsTable->item(i,j+1)->setBackground(QColor("white"));
+        }
+    }
+}
+
+void MainWindow::on_removePCAP_clicked()
+{
+    for (int i=ui->resultsTable->rowCount();i>0;i--)
+    {
+        if (ui->resultsTable->item(i-1,0)->checkState())
+        {
+            ui->resultsTable->removeRow(i-1);
         }
     }
 }

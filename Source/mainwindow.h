@@ -6,6 +6,11 @@
 #include <QProcess>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QtConcurrent>
+#include <QMutex>
+#include <QTimer>
+#include <QTableWidgetItem>
+
 
 #include "pcap.h"
 
@@ -21,6 +26,8 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    void searchInBG(int, int);
+
 private slots:
 
 
@@ -32,7 +39,8 @@ private slots:
 
     void doSearch();
 
-    void updateResultTable();
+    void prepResultTable(QTableWidgetItem* resultItem);
+    void updateResultTable(QTableWidgetItem* resultItem, QString stdOut, QString stdErr);
 
     void on_filterTable_cellChanged(int row, int column);
 
@@ -42,7 +50,16 @@ private slots:
 
     void on_clearResults_clicked();
 
+    void on_removePCAP_clicked();
+
 private:
     Ui::MainWindow *ui;
+
+signals:
+    void newResult(QTableWidgetItem* resultItem, QString stdOut, QString stdErr);
+    void startingFilter(QTableWidgetItem* resultItem);
+
 };
 #endif // MAINWINDOW_H
+
+Q_DECLARE_METATYPE(PCAP*);
