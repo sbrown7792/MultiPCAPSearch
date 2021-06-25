@@ -3,6 +3,7 @@
 
 
 QList<PCAP> PCAPList;
+bool addingRow=false;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -11,6 +12,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     ui->filterTable->setColumnWidth(1,400);
+    ui->filterTable->horizontalHeader()->setStretchLastSection(true);
+
 }
 
 MainWindow::~MainWindow()
@@ -26,6 +29,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_addFilter_clicked()
 {
+    addingRow=true;
     ui->filterTable->setRowCount(ui->filterTable->rowCount()+1);
 
     QTableWidgetItem* item = new QTableWidgetItem();
@@ -50,8 +54,7 @@ void MainWindow::on_addFilter_clicked()
         item = new QTableWidgetItem();
         ui->resultsTable->setItem(i,ui->resultsTable->columnCount()-1,item);
     }
-
-
+    addingRow=false;
 }
 
 
@@ -100,29 +103,72 @@ void MainWindow::doSearch()
         //iterate through filter rows
         for (int j=0;j<ui->filterTable->rowCount();j++)
         {
+            ui->resultsTable->item(i,j+1)->setBackground(QColor("white"));
+            ui->resultsTable->item(i,j+1)->setText("Filtering...");
+
+            //TODO throw this stuff in the background please
             QString filter = ui->filterTable->item(j,1)->text();
+
             PCAP *searchPCAP = ui->resultsTable->item(i,0)->data(Qt::UserRole).value<PCAP*>();
             QString result = searchPCAP->doSearch(filter);
+            QString stdOut = result.split('|').at(0);
+            QString stdErr = result.split('|').at(1);
 
-            ui->resultsTable->item(i,j+1)->setText(result);
+            ui->resultsTable->item(i,j+1)->setText(stdOut.split('\n').at(0));
+            ui->resultsTable->item(i,j+1)->setToolTip(stdErr);
+
+            if (!(stdErr.isNull() || stdErr.isEmpty()))
+            {
+                //highlight the cell because there's an error
+                ui->resultsTable->item(i,j+1)->setBackground(QColor("red"));
+            }
         }
     }
-
-    //QMessageBox::warning(this, tr("Result"),PCAPList[PCAPList.length()-1].doSearch(myFilters));
 }
 
 
 void MainWindow::on_filterTable_cellChanged(int row, int column)
 {
     //make sure we're done allocating items
+    if (ui->filterTable->item(row,0) == nullptr)
+        return;
     if (ui->filterTable->item(row,1) == nullptr)
         return;
+    if (addingRow)
+        return;
 
+    //else, figure out what updated
+    //is is the filter name?
+    if (column == 0)
+    {
+        //set the header to the text from the filter table
+        ui->resultsTable->horizontalHeaderItem(row+1)->setText(ui->filterTable->item(row,column)->text());
+        return;
+    }
+    //or is it the filter text itself?
+    if (column == 1)
+    {
+        //make the tooltip the text so maybe not have to scroll?
+        ui->filterTable->item(row,column)->setToolTip(ui->filterTable->item(row,column)->text());
+
+        //clear out the result text from everything in this column, since the filter text changed.
+        for (int i=0;i<ui->resultsTable->rowCount();i++)
+        {
+            ui->resultsTable->item(i,row+1)->setText("");
+            ui->resultsTable->item(i,row+1)->setBackground(QColor("white"));
+        }
+        //check if live search is turned on and if so, re-run search(es)
+        if (ui->liveSearch->checkState())
+        {
+            doSearch();
+        }
+    }
     return;
 }
 
 void MainWindow::on_addPCAP_clicked()
 {
+
     //prompt user for pcap file
     QString fileName = QFileDialog::getOpenFileName(this, tr("Select PCAP"), ".", tr("PCAP Files (*.pcap *.pcapng)"));
 
@@ -132,6 +178,7 @@ void MainWindow::on_addPCAP_clicked()
     //store the PCAP object in a list - probably need to change it to store in the table, unless we store pointers in the table??
     //PCAPList.append(PCAP(fileName,name));
 
+    addingRow=true;
     ui->resultsTable->setRowCount(ui->resultsTable->rowCount()+1);
 
     QTableWidgetItem *pcapFile = new QTableWidgetItem();
@@ -149,10 +196,34 @@ void MainWindow::on_addPCAP_clicked()
         QTableWidgetItem *item = new QTableWidgetItem();
         ui->resultsTable->setItem(ui->resultsTable->rowCount()-1,i+1,item);
     }
+    addingRow=false;
+
+    //check if live search is turned on and if so, re-run search(es)
+    if (ui->liveSearch->checkState())
+    {
+        doSearch();
+    }
 
 }
 
 void MainWindow::on_searchNow_clicked()
 {
     doSearch();
+}
+
+void MainWindow::on_clearResults_clicked()
+{
+    //iterate through PCAP rows
+    for (int i=0;i<ui->resultsTable->rowCount();i++)
+    {
+        PCAP *searchPCAP = ui->resultsTable->item(i,0)->data(Qt::UserRole).value<PCAP*>();
+        searchPCAP->clearResults();
+        //iterate through filter rows
+        for (int j=0;j<ui->filterTable->rowCount();j++)
+        {
+            ui->resultsTable->item(i,j+1)->setText("");
+            ui->resultsTable->item(i,j+1)->setToolTip("");
+            ui->resultsTable->item(i,j+1)->setBackground(QColor("white"));
+        }
+    }
 }

@@ -46,7 +46,7 @@
      <rect>
       <x>40</x>
       <y>280</y>
-      <width>81</width>
+      <width>131</width>
       <height>23</height>
      </rect>
     </property>
@@ -59,12 +59,12 @@
      <rect>
       <x>40</x>
       <y>310</y>
-      <width>81</width>
+      <width>131</width>
       <height>23</height>
      </rect>
     </property>
     <property name="text">
-     <string>Remove PCAP</string>
+     <string>Remove PCAP file</string>
     </property>
    </widget>
    <widget class="QTableWidget" name="filterTable">
@@ -96,9 +96,9 @@
    <widget class="QPushButton" name="addFilter">
     <property name="geometry">
      <rect>
-      <x>260</x>
+      <x>244</x>
       <y>20</y>
-      <width>75</width>
+      <width>91</width>
       <height>23</height>
      </rect>
     </property>
@@ -109,9 +109,9 @@
    <widget class="QPushButton" name="deleteFilter">
     <property name="geometry">
      <rect>
-      <x>260</x>
+      <x>244</x>
       <y>50</y>
-      <width>75</width>
+      <width>91</width>
       <height>23</height>
      </rect>
     </property>
@@ -143,6 +143,19 @@
     </property>
     <property name="text">
      <string>Live Search</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="clearResults">
+    <property name="geometry">
+     <rect>
+      <x>190</x>
+      <y>310</y>
+      <width>121</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Clear all results</string>
     </property>
    </widget>
   </widget>
