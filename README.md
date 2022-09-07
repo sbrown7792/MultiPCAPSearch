@@ -11,3 +11,9 @@ Also, the PCAP/filter combo is hashed and the filter results are stored in the h
 It's not pretty, but it works. At least on my machine :)
 
 Built with Qt Creator 4.14.2. 
+
+
+## Why?
+Imagine you're a network engineer and trying to follow the flow of traffic across many devices. You have multiple PCAPs from SPAN/RSPAN/ERSPAN sessions at each hop, and you want to see where drops are occurring. Let's say some hops encrypt the traffic within GRE or ESP, so you'll need a different filter to identify the target traffic in those captures vs the plaintext captures. 
+
+Load up all your PCAPs here, make two filters: one for the plaintext source/dest IPs and the second for the tunnel source/dest IPs, and then it's easy to see how many packets in each PCAP match those filters. No need to open 10 copies of Wireshark and worrying about synching your display filters across all instances, then recording each resulting "Displayed" packet count.  
