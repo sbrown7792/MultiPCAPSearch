@@ -6,6 +6,7 @@ Searches multiple PCAPs
 3) Click "Search Now" and wait. 
 
 Each PCAP will have each filter applied to it, and the resulting number of packets are displayed in the cell. If you have more than one PCAP/filter (which of course you do, why else would you use this tool?) the searches are parallelized, one for each core you have on your PC.
+Also, the PCAP/filter combo is hashed and the filter results are stored in the hash table, so "Search Now" will only actually filter if you change the PCAP or filter text. Otherwise it just returns the cached answer.
 
 It's not pretty, but it works. At least on my machine :)
 
