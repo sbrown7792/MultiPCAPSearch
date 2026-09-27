@@ -1,0 +1,160 @@
+name: Build
+
+on:
+  push:
+    branches: [root]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.8.3"
+
+jobs:
+  linux:
+    name: Linux (AppImage)
+    # Oldest supported runner, so the AppImage runs on as many distros as possible.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            ninja-build tshark libgl1-mesa-dev libfuse2 \
+            libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package AppImage
+        run: |
+          DESTDIR=$PWD/AppDir cmake --install build
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy*.AppImage
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export LINUXDEPLOY_OUTPUT_VERSION="${GITHUB_REF_NAME//\//-}"
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage
+          mv MultiPCAPSearch-*.AppImage MultiPCAPSearch-linux-x86_64.AppImage
+
+      - name: Smoke-test AppImage
+        run: QT_QPA_PLATFORM=offscreen ./MultiPCAPSearch-linux-x86_64.AppImage --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: MultiPCAPSearch-linux-x86_64.AppImage
+
+  windows:
+    name: Windows (zip)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $dist = "MultiPCAPSearch"
+          New-Item -ItemType Directory $dist | Out-Null
+          Copy-Item build/MultiPCAPSearch.exe $dist/
+          windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime $dist/MultiPCAPSearch.exe
+          # Ship the MSVC runtime DLLs so users don't need the VC++ redistributable installed.
+          Copy-Item "$env:VCToolsRedistDir/x64/Microsoft.VC143.CRT/*.dll" $dist/
+          Copy-Item README.md $dist/
+          Compress-Archive -Path $dist -DestinationPath MultiPCAPSearch-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: MultiPCAPSearch-windows-x64.zip
+
+  macos:
+    name: macOS (dmg)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - name: Package
+        run: |
+          macdeployqt build/MultiPCAPSearch.app -dmg
+          mv build/MultiPCAPSearch.dmg MultiPCAPSearch-macos-universal.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: MultiPCAPSearch-macos-universal.dmg
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes_file=docs/release-notes/${GITHUB_REF_NAME}.md
+          if [ -f "$notes_file" ]; then notes=(--notes-file "$notes_file"); else notes=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" dist/* --title "MultiPCAPSearch ${GITHUB_REF_NAME#v}" "${notes[@]}"

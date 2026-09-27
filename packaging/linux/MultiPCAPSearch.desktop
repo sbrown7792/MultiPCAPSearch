@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MultiPCAPSearch
+Comment=Count packets matching Wireshark display filters across many capture files
+Exec=MultiPCAPSearch %F
+Icon=MultiPCAPSearch
+Categories=Network;Monitor;Qt;
+MimeType=application/vnd.tcpdump.pcap;application/x-pcapng;
+Terminal=false
