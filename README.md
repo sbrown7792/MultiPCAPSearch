@@ -63,3 +63,11 @@ Qt Creator can open `CMakeLists.txt` directly. Release binaries are built by [Gi
 - Ported to Qt 6 and CMake. Runs on Windows, macOS and Linux, with prebuilt binaries for each.
 - Uses your installed Wireshark instead of a bundled 2022-era copy, and calls tshark directly instead of going through PowerShell.
 - New: add several files at once, drag and drop, Stop button, CSV export, empty filter = count all, remembered filters, configurable parallelism, and warnings/errors shown per cell.
+
+## License
+
+Copyright (C) 2022-2026 sbrown7792 and MultiPCAPSearch contributors.
+
+MultiPCAPSearch is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
+
+The release binaries include the Qt libraries, which are used under the GNU LGPL v3. MultiPCAPSearch runs Wireshark's `tshark` (GPL-2.0-or-later) as a separate program; it does not include or link to it.

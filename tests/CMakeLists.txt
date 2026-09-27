@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
 qt_add_executable(tst_multipcapsearch

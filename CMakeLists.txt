@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 cmake_minimum_required(VERSION 3.19)
 
 project(MultiPCAPSearch
