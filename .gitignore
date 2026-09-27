@@ -72,3 +72,7 @@ Thumbs.db
 
 *.pcap
 *.pcapng
+# CMake build trees
+/build*/
+CMakeLists.txt.user*
+!packaging/windows/*.rc
