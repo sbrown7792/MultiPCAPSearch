@@ -94,6 +94,10 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           MULTIPCAPSEARCH_REQUIRE_TSHARK: "1"
 
+      - name: Show test report
+        if: always()
+        run: Get-Content build/tests/test-report.txt
+
       - name: Package
         shell: pwsh
         run: |
