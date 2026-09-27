@@ -79,7 +79,11 @@ void TestMultiPcapSearch::initTestCase()
 
     m_tshark = TsharkLocator::find(qEnvironmentVariable("MULTIPCAPSEARCH_TSHARK"));
     if (m_tshark.isEmpty())
+    {
+        if (qEnvironmentVariableIsSet("MULTIPCAPSEARCH_REQUIRE_TSHARK"))
+            QFAIL("tshark not found, but MULTIPCAPSEARCH_REQUIRE_TSHARK is set");
         QSKIP("tshark not found; set MULTIPCAPSEARCH_TSHARK or install Wireshark");
+    }
     qInfo() << "Using tshark at" << m_tshark;
 }
 

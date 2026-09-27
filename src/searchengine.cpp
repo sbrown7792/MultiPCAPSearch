@@ -12,11 +12,11 @@ SearchEngine::SearchEngine(QObject *parent)
 
 SearchEngine::~SearchEngine()
 {
-    // Don't leave tshark processes running (or zombied) after we're gone.
-    for (auto it = m_running.cbegin(); it != m_running.cend(); ++it)
+    // Don't leave tshark processes running (or zombied) after we're gone. This
+    // includes ones cancelAll() already killed but that haven't exited yet.
+    for (QProcess *process : findChildren<QProcess *>(Qt::FindDirectChildrenOnly))
     {
-        QProcess *process = it.key();
-        process->disconnect(this);
+        process->disconnect();
         process->kill();
         process->waitForFinished(2000);
     }
