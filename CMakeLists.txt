@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 project(MultiPCAPSearch
-    VERSION 1.0.0
+    VERSION 1.0.1
     DESCRIPTION "Count packets matching Wireshark display filters across many capture files"
     HOMEPAGE_URL "https://github.com/sbrown7792/MultiPCAPSearch"
     LANGUAGES CXX)
