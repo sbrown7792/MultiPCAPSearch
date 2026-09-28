@@ -63,6 +63,16 @@
             </widget>
            </item>
            <item>
+            <widget class="QCheckBox" name="followFiles">
+             <property name="toolTip">
+              <string>Keep counting as capture files grow, e.g. while Wireshark, dumpcap or tcpdump is still writing them. Runs tshark continuously in the background.</string>
+             </property>
+             <property name="text">
+              <string>Follow growing files</string>
+             </property>
+            </widget>
+           </item>
+           <item>
             <layout class="QHBoxLayout" name="searchButtons">
              <item>
               <widget class="QPushButton" name="searchNow">

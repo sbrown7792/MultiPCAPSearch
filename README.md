@@ -40,6 +40,7 @@ Each cell shows how many packets in that capture match that filter.
 - **Red** cells are errors, such as an invalid filter or an unreadable file. **Amber** cells completed but tshark printed a warning (e.g. a truncated capture). Hover over a cell to read tshark's message.
 - Searches run in parallel, one tshark process per CPU core by default (change this in **Settings > Parallel Searches...**). **Stop** cancels everything in flight.
 - Results are cached per capture file and filter, so re-running only filters what changed. The cache is dropped automatically if a capture file changes on disk, or manually with **Clear All Results**.
+- **Follow growing files** keeps counting while a capture is still being written, e.g. by Wireshark, `dumpcap -w`, or `tcpdump -w`. The counts go up as packets arrive. Each capture is streamed through a tshark that keeps running, so new packets are counted as soon as they reach the disk, and the results always match a full re-scan (filters that depend on earlier packets, such as `tcp.analysis.*`, stay correct). With **tshark 4.4 or newer**, one tshark process per capture handles all your filters. Older tshark needs one process per capture per filter, roughly 150 MB each. If a capture is truncated or replaced, it is re-read from the start. Italic counts mean the packets already in the file are still being read.
 - **Export CSV...** saves the results table.
 - Filters, window layout and the last folder you browsed are remembered between sessions.
 

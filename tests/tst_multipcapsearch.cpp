@@ -7,6 +7,7 @@
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QLineEdit>
+#include <QProcess>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QTableWidget>
@@ -14,6 +15,8 @@
 #include <QTest>
 #include <QTimer>
 
+#include "capturefollower.h"
+#include "livemonitor.h"
 #include "mainwindow.h"
 #include "searchengine.h"
 #include "testpcap.h"
@@ -59,6 +62,14 @@ private slots:
     void respectsConcurrencyLimit();
     void cancelAllStopsEverything();
 
+    void followsGrowingFile_data();
+    void followsGrowingFile();
+    void followerRestartsWhenFileIsReplaced();
+    void followerReportsBadFilter();
+    void monitorKeepsBadFilterToItsColumn_data();
+    void monitorKeepsBadFilterToItsColumn();
+    void mainWindowFollowsGrowingFile();
+
     void editingTablesDuringSearchDoesNotCrash();
     void remembersLastBrowsedDirectory();
 
@@ -66,8 +77,14 @@ private:
     QString capturePath(const Capture &c) const { return m_dir.filePath(QString::fromLatin1(c.name)); }
     SearchResult runOne(SearchEngine &engine, const QString &file, const QString &filter);
 
+    // Appends packets [first, first+count) to a test capture in ragged
+    // chunks that split packets across writes, like a live capture would.
+    void growCapture(const QString &path, int first, int count, int dnsEvery);
+    bool tsharkSupportsMultiFilter();
+
     QTemporaryDir m_dir;
     QString m_tshark;
+    int m_multiFilter = -1;   // unknown
 };
 
 void TestMultiPcapSearch::initTestCase()
@@ -88,6 +105,35 @@ void TestMultiPcapSearch::initTestCase()
         QSKIP("tshark not found; set MULTIPCAPSEARCH_TSHARK or install Wireshark");
     }
     qInfo() << "Using tshark at" << m_tshark;
+}
+
+void TestMultiPcapSearch::growCapture(const QString &path, int first, int count, int dnsEvery)
+{
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::Append));
+    const QByteArray bytes = testPcapBytes(first, count, dnsEvery, 2, first == 0);
+    for (qsizetype offset = 0; offset < bytes.size(); offset += 259)   // 259: never a packet boundary
+    {
+        QVERIFY(file.write(bytes.mid(offset, 259)) > 0);
+        file.flush();
+        QTest::qWait(10);
+    }
+}
+
+bool TestMultiPcapSearch::tsharkSupportsMultiFilter()
+{
+    if (m_multiFilter < 0)
+    {
+        QProcess probe;
+        probe.start(m_tshark, {QStringLiteral("-n"), QStringLiteral("-r"), QStringLiteral("-"), QStringLiteral("-T"),
+                               QStringLiteral("fields"), QStringLiteral("-e"), CaptureFollower::expressionFor(QString())});
+        probe.write(testPcapBytes(0, 0, 1));
+        probe.closeWriteChannel();
+        probe.waitForFinished(30000);
+        m_multiFilter = probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
+        qInfo() << "tshark supports multiple filters per process:" << bool(m_multiFilter);
+    }
+    return m_multiFilter;
 }
 
 void TestMultiPcapSearch::cleanup()
@@ -225,6 +271,146 @@ void TestMultiPcapSearch::cancelAllStopsEverything()
 
     QTest::qWait(1500);
     QCOMPARE(results.size(), 0);
+}
+
+void TestMultiPcapSearch::followsGrowingFile_data()
+{
+    QTest::addColumn<bool>("multi");
+    QTest::newRow("one filter per tshark") << false;
+    QTest::newRow("all filters in one tshark") << true;
+}
+
+void TestMultiPcapSearch::followsGrowingFile()
+{
+    QFETCH(bool, multi);
+    if (multi && !tsharkSupportsMultiFilter())
+        QSKIP("needs tshark 4.4 or newer");
+
+    const QString path = m_dir.filePath(multi ? QStringLiteral("grow-multi.pcap") : QStringLiteral("grow-single.pcap"));
+    QFile::remove(path);
+    growCapture(path, 0, 40, 4);
+
+    const QStringList filters = multi ? QStringList{QStringLiteral("udp.dstport == 53"),
+                                                    QStringLiteral("ip.src == 10.0.0.1"), QString()}
+                                      : QStringList{QStringLiteral("udp.dstport == 53")};
+    CaptureFollower follower(m_tshark, path, filters,
+                             multi ? CaptureFollower::Mode::MultiFilter : CaptureFollower::Mode::SingleFilter);
+    follower.setPollInterval(50);
+    follower.start();
+
+    auto expected = [&](int packets) {
+        QList<qint64> counts{testPcapDnsCount(packets, 4)};
+        if (multi)
+            counts << testPcapHost1Count(packets) << packets;
+        return counts;
+    };
+
+    QTRY_COMPARE_WITH_TIMEOUT(follower.counts(), expected(40), 30000);
+    QTRY_VERIFY_WITH_TIMEOUT(follower.caughtUp(), 5000);
+
+    // Keep writing; the counts should follow without restarting anything.
+    growCapture(path, 40, 23, 4);
+    QTRY_COMPARE_WITH_TIMEOUT(follower.counts(), expected(63), 30000);
+    growCapture(path, 63, 137, 4);
+    QTRY_COMPARE_WITH_TIMEOUT(follower.counts(), expected(200), 30000);
+    QVERIFY2(follower.error().isEmpty(), qPrintable(follower.error()));
+}
+
+void TestMultiPcapSearch::followerRestartsWhenFileIsReplaced()
+{
+    const QString path = m_dir.filePath(QStringLiteral("replaced.pcap"));
+    QVERIFY(writeTestPcap(path, 80, 4));
+
+    CaptureFollower follower(m_tshark, path, {QString()}, CaptureFollower::Mode::SingleFilter);
+    follower.setPollInterval(50);
+    follower.start();
+    QTRY_COMPARE_WITH_TIMEOUT(follower.counts().value(0), 80, 30000);
+
+    // A new, shorter capture under the same name (e.g. a restarted capture).
+    QVERIFY(writeTestPcap(path, 30, 3));
+    QTRY_COMPARE_WITH_TIMEOUT(follower.counts().value(0), 30, 30000);
+}
+
+void TestMultiPcapSearch::followerReportsBadFilter()
+{
+    CaptureFollower follower(m_tshark, capturePath(captures[0]), {QStringLiteral("ip.srcc == 1")},
+                             CaptureFollower::Mode::SingleFilter);
+    follower.setPollInterval(50);
+    follower.start();
+    QTRY_VERIFY_WITH_TIMEOUT(!follower.error().isEmpty(), 30000);
+}
+
+void TestMultiPcapSearch::monitorKeepsBadFilterToItsColumn_data()
+{
+    QTest::addColumn<bool>("forceSingle");
+    QTest::newRow("best available mode") << false;
+    QTest::newRow("one filter per tshark") << true;
+}
+
+void TestMultiPcapSearch::monitorKeepsBadFilterToItsColumn()
+{
+    QFETCH(bool, forceSingle);
+
+    LiveMonitor monitor;
+    monitor.setPollInterval(50);
+    monitor.setForceSingleFilter(forceSingle);
+    monitor.setTsharkPath(m_tshark);
+    const QString a = capturePath(captures[0]);
+    const QString b = capturePath(captures[1]);
+    const QString dns = QStringLiteral("udp.dstport == 53");
+    const QString bad = QStringLiteral("ip.srcc == 1");
+    monitor.setTargets({a, b}, {dns, bad, QString()});
+    monitor.setActive(true);
+
+    auto count = [&](const QString &file, const QString &filter) {
+        const LiveMonitor::CellState state = monitor.state(file, filter);
+        return state.status == LiveMonitor::CellState::Following ? state.count : -1;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(count(a, dns), 25, 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(count(b, dns), 20, 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(count(a, QString()), 100, 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(count(b, QString()), 60, 30000);
+    QCOMPARE(monitor.state(a, bad).status, LiveMonitor::CellState::Error);
+    QVERIFY(!monitor.state(a, bad).message.isEmpty());
+
+    const bool shared = !forceSingle && tsharkSupportsMultiFilter();
+    QCOMPARE(monitor.processCount(), shared ? 2 : 4);
+
+    monitor.setActive(false);
+    QCOMPARE(monitor.processCount(), 0);
+}
+
+void TestMultiPcapSearch::mainWindowFollowsGrowingFile()
+{
+    QSettings().setValue(QStringLiteral("tsharkPath"), m_tshark);
+    const QString path = m_dir.filePath(QStringLiteral("window-grow.pcap"));
+    QFile::remove(path);
+    growCapture(path, 0, 10, 4);
+
+    MainWindow window;
+    auto *results = window.findChild<QTableWidget *>(QStringLiteral("resultsTable"));
+    auto *follow = window.findChild<QCheckBox *>(QStringLiteral("followFiles"));
+    QVERIFY(results && follow);
+
+    window.addFilterRow(QStringLiteral("DNS"), QStringLiteral("udp.dstport == 53"));
+    window.addFilterRow(QStringLiteral("All"), QString());
+    window.addPcapFiles({path}, false);
+    follow->setChecked(true);
+
+    QTRY_COMPARE_WITH_TIMEOUT(results->item(0, 1)->text(), QStringLiteral("3"), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(results->item(0, 2)->text(), QStringLiteral("10"), 30000);
+
+    growCapture(path, 10, 30, 4);
+    QTRY_COMPARE_WITH_TIMEOUT(results->item(0, 1)->text(), QStringLiteral("10"), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(results->item(0, 2)->text(), QStringLiteral("40"), 30000);
+
+    // Adding a filter while following picks it up too.
+    window.addFilterRow(QStringLiteral("Host1"), QStringLiteral("ip.src == 10.0.0.1"));
+    QTRY_COMPARE_WITH_TIMEOUT(results->item(0, 3)->text(), QStringLiteral("20"), 30000);
+
+    // Turning it off keeps the last counts.
+    follow->setChecked(false);
+    QCOMPARE(results->item(0, 2)->text(), QStringLiteral("40"));
 }
 
 // Regression test for issue #2: adding (or removing) captures and filters while
