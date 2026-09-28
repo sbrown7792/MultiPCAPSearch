@@ -6,9 +6,11 @@
 
 #include <QMainWindow>
 
+#include "livemonitor.h"
 #include "searchengine.h"
 
 class QLabel;
+class QTimer;
 class QTableWidget;
 class QTableWidgetItem;
 
@@ -47,6 +49,7 @@ private slots:
     void on_filterTable_cellChanged(int row, int column);
 
     void on_liveSearch_toggled(bool checked);
+    void on_followFiles_toggled(bool checked);
     void on_searchNow_clicked();
     void on_stopSearch_clicked();
 
@@ -57,6 +60,8 @@ private slots:
     void onSearchStarted(const QString &file, const QString &filter);
     void onResultReady(const QString &file, const QString &filter, const SearchResult &result);
     void onPendingJobsChanged(int pending);
+    void syncMonitor();
+    void onMonitorChanged();
 
 private:
     enum CellState { Idle, Queued, Running, Done };
@@ -86,6 +91,8 @@ private:
 
     Ui::MainWindow *ui;
     SearchEngine m_engine;
+    LiveMonitor m_monitor;
+    QTimer *m_syncTimer;
     QLabel *m_tsharkLabel;
     bool m_loading = false;
 };

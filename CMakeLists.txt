@@ -15,6 +15,10 @@ qt_standard_project_setup()
 
 # Everything but main() lives in a static library so the tests can link it too.
 qt_add_library(multipcapsearch_core STATIC
+    src/capturefollower.cpp
+    src/capturefollower.h
+    src/livemonitor.cpp
+    src/livemonitor.h
     src/mainwindow.cpp
     src/mainwindow.h
     src/mainwindow.ui

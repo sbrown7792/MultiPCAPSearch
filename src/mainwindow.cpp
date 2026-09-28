@@ -24,6 +24,7 @@
 #include <QSignalBlocker>
 #include <QTextStream>
 #include <QThread>
+#include <QTimer>
 #include <QUrl>
 
 namespace
@@ -49,6 +50,7 @@ namespace
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , m_syncTimer(new QTimer(this))
     , m_tsharkLabel(new QLabel(this))
 {
     ui->setupUi(this);
@@ -69,6 +71,22 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&m_engine, &SearchEngine::searchStarted, this, &MainWindow::onSearchStarted);
     connect(&m_engine, &SearchEngine::resultReady, this, &MainWindow::onResultReady);
     connect(&m_engine, &SearchEngine::pendingJobsChanged, this, &MainWindow::onPendingJobsChanged);
+
+    // While following growing files, keep the monitor's list of captures and
+    // filters in step with the tables, whatever changed them. Changes are
+    // batched into one update per event-loop pass.
+    m_syncTimer->setSingleShot(true);
+    m_syncTimer->setInterval(0);
+    connect(m_syncTimer, &QTimer::timeout, this, &MainWindow::syncMonitor);
+    for (QAbstractItemModel *model : {ui->resultsTable->model(), ui->filterTable->model()})
+    {
+        connect(model, &QAbstractItemModel::dataChanged, m_syncTimer, qOverload<>(&QTimer::start));
+        connect(model, &QAbstractItemModel::rowsInserted, m_syncTimer, qOverload<>(&QTimer::start));
+        connect(model, &QAbstractItemModel::rowsRemoved, m_syncTimer, qOverload<>(&QTimer::start));
+        connect(model, &QAbstractItemModel::columnsInserted, m_syncTimer, qOverload<>(&QTimer::start));
+        connect(model, &QAbstractItemModel::columnsRemoved, m_syncTimer, qOverload<>(&QTimer::start));
+    }
+    connect(&m_monitor, &LiveMonitor::changed, this, &MainWindow::onMonitorChanged);
 
     // Renaming a capture only changes its label; nothing to re-search.
     connect(ui->resultsTable, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *item) {
@@ -155,6 +173,7 @@ void MainWindow::resetCell(QTableWidgetItem *cell)
     cell->setText(QString());
     cell->setToolTip(QString());
     cell->setData(Qt::BackgroundRole, QVariant());
+    cell->setData(Qt::FontRole, QVariant());
     cell->setData(StateRole, Idle);
 }
 
@@ -184,6 +203,7 @@ void MainWindow::resetPendingCells()
 void MainWindow::setCellResult(QTableWidgetItem *cell, const SearchResult &result)
 {
     cell->setData(StateRole, Done);
+    cell->setData(Qt::FontRole, QVariant());
     cell->setToolTip(result.message);
 
     switch (result.status)
@@ -211,7 +231,7 @@ void MainWindow::searchCell(int pcapRow, int filterRow)
 {
     QTableWidgetItem *cell = resultCell(pcapRow, filterRow);
     const QString file = pcapFile(pcapRow);
-    if (!cell || file.isEmpty())
+    if (!cell || file.isEmpty() || m_monitor.isActive())
         return;
 
     // Mark it queued first; a cached result is delivered synchronously and overwrites this.
@@ -289,9 +309,133 @@ void MainWindow::on_stopSearch_clicked()
 
 void MainWindow::on_liveSearch_toggled(bool checked)
 {
-    ui->searchNow->setEnabled(!checked);
+    ui->searchNow->setEnabled(!checked && !ui->followFiles->isChecked());
     if (checked && !m_loading)
         searchAll();
+}
+
+// ---------------------------------------------------------------------------
+// Following growing files
+// ---------------------------------------------------------------------------
+
+void MainWindow::on_followFiles_toggled(bool checked)
+{
+    ui->liveSearch->setEnabled(!checked);
+    ui->searchNow->setEnabled(!checked && !ui->liveSearch->isChecked());
+
+    if (checked)
+    {
+        // The followers produce every count from now on.
+        m_engine.cancelAll();
+        resetPendingCells();
+        m_monitor.setActive(true);
+        syncMonitor();
+        return;
+    }
+
+    m_monitor.setActive(false);
+    // Keep the last counts, but they're no longer live.
+    for (int pcapRow = 0; pcapRow < ui->resultsTable->rowCount(); ++pcapRow)
+    {
+        for (int filterRow = 0; filterRow < ui->filterTable->rowCount(); ++filterRow)
+        {
+            QTableWidgetItem *cell = resultCell(pcapRow, filterRow);
+            if (!cell)
+                continue;
+            if (cell->data(StateRole).toInt() != Done)
+            {
+                resetCell(cell);
+                continue;
+            }
+            cell->setData(Qt::FontRole, QVariant());
+            if (cell->data(Qt::BackgroundRole).isNull())
+                cell->setToolTip(tr("Count when following stopped"));
+        }
+    }
+    ui->statusbar->showMessage(tr("Stopped following files"), 3000);
+    if (ui->liveSearch->isChecked())
+        searchAll();
+}
+
+void MainWindow::syncMonitor()
+{
+    QStringList files;
+    for (int pcapRow = 0; pcapRow < ui->resultsTable->rowCount(); ++pcapRow)
+    {
+        const QString file = pcapFile(pcapRow);
+        if (!file.isEmpty())
+            files << file;
+    }
+    QStringList filters;
+    for (int filterRow = 0; filterRow < ui->filterTable->rowCount(); ++filterRow)
+    {
+        if (ui->filterTable->item(filterRow, 1))
+            filters << filterText(filterRow);
+    }
+    m_monitor.setTargets(files, filters);
+    onMonitorChanged();
+}
+
+void MainWindow::onMonitorChanged()
+{
+    if (!m_monitor.isActive())
+        return;
+
+    // Our own cell updates would otherwise schedule another syncMonitor().
+    const QSignalBlocker blocker(ui->resultsTable->model());
+
+    bool allCaughtUp = true;
+    for (int pcapRow = 0; pcapRow < ui->resultsTable->rowCount(); ++pcapRow)
+    {
+        const QString file = pcapFile(pcapRow);
+        for (int filterRow = 0; filterRow < ui->filterTable->rowCount(); ++filterRow)
+        {
+            QTableWidgetItem *cell = resultCell(pcapRow, filterRow);
+            if (!cell || file.isEmpty())
+                continue;
+
+            const LiveMonitor::CellState state = m_monitor.state(file, filterText(filterRow));
+            switch (state.status)
+            {
+            case LiveMonitor::CellState::Starting:
+                allCaughtUp = false;
+                if (cell->data(StateRole).toInt() != Done)
+                {
+                    cell->setText(tr("Starting..."));
+                    cell->setToolTip(QString());
+                    cell->setData(StateRole, Running);
+                }
+                break;
+            case LiveMonitor::CellState::Following:
+            {
+                allCaughtUp = allCaughtUp && state.caughtUp;
+                cell->setText(QString::number(state.count));
+                cell->setData(Qt::BackgroundRole, QVariant());
+                cell->setData(StateRole, Done);
+                // Italic while still working through what was already in the file.
+                QFont font = cell->font();
+                font.setItalic(!state.caughtUp);
+                cell->setFont(font);
+                cell->setToolTip(state.caughtUp ? tr("Live: watching this file for new packets")
+                                                : tr("Reading the packets already in this file..."));
+                break;
+            }
+            case LiveMonitor::CellState::Error:
+                setCellResult(cell, SearchResult{SearchResult::Error, 0, state.message});
+                break;
+            }
+        }
+    }
+    ui->resultsTable->viewport()->update();
+
+    const int processes = m_monitor.processCount();
+    QString message = allCaughtUp ? tr("Following %n capture file(s)", nullptr, ui->resultsTable->rowCount())
+                                  : tr("Reading capture files...");
+    if (processes > 0)
+        message += tr(" (%n tshark process(es))", nullptr, processes);
+    if (m_monitor.capability() == LiveMonitor::Capability::SingleFilter && processes > 1)
+        message += tr(" - with tshark 4.4 or newer this needs only one per file");
+    ui->statusbar->showMessage(message);
 }
 
 // ---------------------------------------------------------------------------
@@ -541,6 +685,7 @@ void MainWindow::setTsharkPath(const QString &path)
         resetPendingCells();
     }
     m_engine.setTsharkPath(path);
+    m_monitor.setTsharkPath(path);
     refreshTsharkStatus();
 }
 
@@ -675,5 +820,6 @@ void MainWindow::closeEvent(QCloseEvent *event)
     settings.setValue(QStringLiteral("splitter"), ui->splitter->saveState());
     saveSettings();
     m_engine.cancelAll();
+    m_monitor.setActive(false);
     QMainWindow::closeEvent(event);
 }

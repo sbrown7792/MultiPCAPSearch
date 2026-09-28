@@ -9,30 +9,31 @@
 #include <QString>
 #include <QtEndian>
 
-// Writes a classic little-endian pcap of Ethernet/IPv4/UDP packets. Packet i
-// (0-based) goes from 10.0.0.<1 + i % srcHosts> to UDP port 53 when
-// i % dnsEvery == 0 and to port 8080 otherwise.
-inline bool writeTestPcap(const QString &path, int packets, int dnsEvery, int srcHosts = 2)
+// Builds a classic little-endian pcap of Ethernet/IPv4/UDP packets: the file
+// header (if withHeader) followed by packets first .. first+count-1. Packet i
+// goes from 10.0.0.<1 + i % srcHosts> to UDP port 53 when i % dnsEvery == 0
+// and to port 8080 otherwise. Concatenating calls for consecutive ranges gives
+// the same bytes as one call, so tests can grow a file packet by packet.
+inline QByteArray testPcapBytes(int first, int count, int dnsEvery, int srcHosts = 2, bool withHeader = true)
 {
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly))
-        return false;
-
     auto le32 = [](QByteArray &b, quint32 v) { v = qToLittleEndian(v); b.append(reinterpret_cast<const char *>(&v), 4); };
     auto le16 = [](QByteArray &b, quint16 v) { v = qToLittleEndian(v); b.append(reinterpret_cast<const char *>(&v), 2); };
     auto be16 = [](QByteArray &b, quint16 v) { v = qToBigEndian(v); b.append(reinterpret_cast<const char *>(&v), 2); };
 
     QByteArray out;
-    le32(out, 0xa1b2c3d4);  // magic
-    le16(out, 2);           // version major
-    le16(out, 4);           // version minor
-    le32(out, 0);           // thiszone
-    le32(out, 0);           // sigfigs
-    le32(out, 65535);       // snaplen
-    le32(out, 1);           // LINKTYPE_ETHERNET
+    if (withHeader)
+    {
+        le32(out, 0xa1b2c3d4);  // magic
+        le16(out, 2);           // version major
+        le16(out, 4);           // version minor
+        le32(out, 0);           // thiszone
+        le32(out, 0);           // sigfigs
+        le32(out, 65535);       // snaplen
+        le32(out, 1);           // LINKTYPE_ETHERNET
+    }
 
     const QByteArray payload(16, 'x');
-    for (int i = 0; i < packets; ++i)
+    for (int i = first; i < first + count; ++i)
     {
         QByteArray pkt;
         pkt.append("\x00\x11\x22\x33\x44\x55", 6);   // dst MAC
@@ -74,6 +75,20 @@ inline bool writeTestPcap(const QString &path, int packets, int dnsEvery, int sr
         out.append(pkt);
     }
 
+    return out;
+}
+
+// Number of packets in [0, packets) matching udp.dstport == 53 / ip.src == 10.0.0.1.
+inline int testPcapDnsCount(int packets, int dnsEvery) { return (packets + dnsEvery - 1) / dnsEvery; }
+inline int testPcapHost1Count(int packets) { return (packets + 1) / 2; }
+
+// Writes a complete test capture of `packets` packets (see testPcapBytes).
+inline bool writeTestPcap(const QString &path, int packets, int dnsEvery, int srcHosts = 2)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+        return false;
+    const QByteArray out = testPcapBytes(0, packets, dnsEvery, srcHosts);
     return file.write(out) == out.size();
 }
 
