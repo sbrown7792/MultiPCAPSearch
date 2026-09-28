@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 sbrown7792 and MultiPCAPSearch contributors
+
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
@@ -614,6 +617,8 @@ void MainWindow::on_actionAbout_triggered()
            "and compare the matching packet counts side by side.</p>"
            "<p>Uses tshark: <code>%2</code></p>"
            "<p>Built with Qt %3.</p>"
+           "<p>Licensed under the GNU Affero General Public License v3.0 or later. "
+           "This program comes with ABSOLUTELY NO WARRANTY.</p>"
            "<p><a href=\"https://github.com/sbrown7792/MultiPCAPSearch\">github.com/sbrown7792/MultiPCAPSearch</a></p>")
             .arg(QCoreApplication::applicationVersion(),
                  m_engine.tsharkPath().isEmpty() ? tr("not found") : m_engine.tsharkPath().toHtmlEscaped(),
